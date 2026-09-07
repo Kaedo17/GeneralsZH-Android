@@ -85,6 +85,7 @@ jobs:
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
+          GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log
           echo "Gradle build complete"
