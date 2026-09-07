@@ -173,12 +173,22 @@ if(RTS_BUILD_ZEROHOUR)
     if(TARGET sage_patch)
         add_dependencies(z_generals sage_patch)
     endif()
+    # GeneralsX @build 07/09/2026 Make engine depend on DXVK so Gradle's
+    # externalNativeBuild (which only builds named targets) also builds DXVK.
+    if(TARGET dxvk_d3d8_install)
+        add_dependencies(z_generals dxvk_d3d8_install)
+    endif()
 endif()
 
 if(RTS_BUILD_GENERALS)
     add_subdirectory(Generals)
     if(TARGET sage_patch)
         add_dependencies(g_generals sage_patch)
+    endif()
+    # GeneralsX @build 07/09/2026 Make engine depend on DXVK so Gradle's
+    # externalNativeBuild (which only builds named targets) also builds DXVK.
+    if(TARGET dxvk_d3d8_install)
+        add_dependencies(g_generals dxvk_d3d8_install)
     endif()
 endif()
 
