@@ -81,13 +81,37 @@ jobs:
           gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
-      - name: Build APK (assembleRelease)
+      - name: Build APK (assembleRelease) — pass 1 (configure + compile)
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log || true
+
+      - name: Build DXVK via meson (Gradle skips ALL custom targets)
+        run: |
+          echo "==> Building DXVK d3d8/d3d9 via meson"
+          CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
+          HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
+          CXX_DIR="$HASH_DIR/arm64-v8a"
+          echo "CXX dir: $CXX_DIR"
+
+          # Build the DXVK ExternalProject targets using ninja directly
+          ninja -C "$CXX_DIR" -f build.ninja \
+            _deps/dxvk-build-android/src/d3d8/libdxvk_d3d8.so \
+            _deps/dxvk-build-android/src/d3d9/libdxvk_d3d9.so \
+            libdxvk_d3d8.so libdxvk_d3d9.so 2>&1 || true
+
+          # Verify DXVK libs were built
+          for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
+            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
+            if [ -n "$found" ]; then
+              echo "  DXVK $lib built: $found ($(stat -c%s "$found") bytes)"
+            else
+              echo "  WARNING: DXVK $lib not found after build"
+            fi
+          done
 
       - name: Stage ALL native .so libraries into jniLibs
         run: |
