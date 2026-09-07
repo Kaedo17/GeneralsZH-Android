@@ -81,12 +81,20 @@ jobs:
 
       - name: Build DXVK via meson (after pass 1, SDL3 now built)
         run: |
-          echo "==> Building DXVK d3d8/d3d9 via meson"
+          echo "==> Building SDL3 + DXVK"
           CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
           HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
           CXX_DIR="$HASH_DIR/arm64-v8a"
           echo "CXX dir: $CXX_DIR"
-          ninja -C "$CXX_DIR" 2>&1 | tail -20 || true
+
+          # First build SDL3 (DXVK meson needs it for pkg-config)
+          echo "Building SDL3..."
+          ninja -C "$CXX_DIR" _deps/sdl3-build/libSDL3.so 2>&1 | tail -5 || true
+
+          # Now build DXVK
+          echo "Building DXVK..."
+          ninja -C "$CXX_DIR" dxvk_d3d8_install 2>&1 | tail -20 || true
+
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
             found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
