@@ -106,37 +106,32 @@ jobs:
             fi
           done
 
-      - name: Inject DXVK .so into APK
+      - name: Copy DXVK .so to jniLibs and rebuild APK
+        working-directory: android
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
-          APK=$(find android/app/build/outputs -name "*.apk" -type f 2>/dev/null | head -1)
-          if [ -z "$APK" ]; then
-            echo "ERROR: No APK found from pass 1"
-            exit 1
-          fi
-          echo "APK: $APK ($(stat -c%s "$APK") bytes)"
+          JNI_LIBS="app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JNI_LIBS"
 
-          CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
+          CXX_BASE=$(find app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
           HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
           CXX_DIR="$HASH_DIR/arm64-v8a"
 
-          # Find DXVK libs and inject into APK at correct lib/arm64-v8a/ path
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
             found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
-              echo "Injecting $lib into APK..."
-              # Create temp dir with correct structure for zip injection
-              mkdir -p /tmp/apk_inject/lib/arm64-v8a
-              cp "$found" "/tmp/apk_inject/lib/arm64-v8a/$lib"
-              cd /tmp/apk_inject
-              zip -r -u "$APK" lib/ 2>&1
-              cd "$GITHUB_WORKSPACE"
-              rm -rf /tmp/apk_inject
-            else
-              echo "WARNING: $lib not found, skipping injection"
+              cp "$found" "$JNI_LIBS/$lib"
+              echo "Copied $lib to jniLibs ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
             fi
           done
 
-          echo "APK size after injection: $(stat -c%s "$APK") bytes"
+          echo "jniLibs contents:"
+          ls -lh "$JNI_LIBS/"
+
+          # Rebuild APK with DXVK in jniLibs
+          ./gradlew assembleRelease --no-daemon -PSAGE_SKIP_NATIVE_BUILD=true --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
 
       - name: Find APK
         id: find-apk
