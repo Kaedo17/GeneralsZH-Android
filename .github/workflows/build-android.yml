@@ -87,6 +87,17 @@ jobs:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
+          # Pass 1: let CMake FetchContent populate SDL3 sources into .cxx cache.
+          # Java compilation needs org.libsdl.app.SDLActivity but Gradle's task
+          # graph doesn't enforce configureCMake before compileReleaseJava.
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log || true
+          # Pass 2: now that SDL3 sources exist, the build should succeed.
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
+        working-directory: android
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
+        run: |
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log
           echo "Gradle build complete"
 
