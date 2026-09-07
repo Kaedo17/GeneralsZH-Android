@@ -79,57 +79,90 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log || true
 
-      - name: Build DXVK via meson (after pass 1, SDL3 now built)
+      - name: Build DXVK with meson (after pass 1, SDL3 now built)
         run: |
-          echo "==> Building SDL3 + DXVK"
+          set -euo pipefail
+          echo "==> Locating CXX build directory"
           CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
           HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
           CXX_DIR="$HASH_DIR/arm64-v8a"
-          echo "CXX dir: $CXX_DIR"
+          echo "CXX_DIR=$CXX_DIR"
 
-          # First build SDL3 (DXVK meson needs it for pkg-config)
-          echo "Building SDL3..."
-          ninja -C "$CXX_DIR" _deps/sdl3-build/libSDL3.so 2>&1 | tail -5 || true
+          DXVK_SRC="$GITHUB_WORKSPACE/references/fbraz3-dxvk"
+          DXVK_BUILD="$CXX_DIR/_deps/dxvk-build-android"
+          CROSS_FILE="$CXX_DIR/meson-android-aarch64-cross.ini"
+          SDL3_PC="$CXX_DIR/sdl3-pkgconfig"
 
-          # Now build DXVK
-          echo "Building DXVK..."
-          ninja -C "$CXX_DIR" dxvk_d3d8_install 2>&1 | tail -20 || true
+          echo "==> Step 1: Build SDL3 (DXVK meson needs it for pkg-config)"
+          ninja -C "$CXX_DIR" SDL3-shared
+          echo "SDL3 built: $(ls -lh $CXX_DIR/_deps/sdl3-build/libSDL3.so)"
 
+          echo "==> Step 2: Wipe stale DXVK meson state (ExternalProject left bad config)"
+          rm -rf "$DXVK_BUILD"
+
+          echo "==> Step 3: Configure DXVK with meson"
+          export PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}"
+          meson setup "$DXVK_BUILD" "$DXVK_SRC" \
+            --cross-file "$CROSS_FILE" \
+            -Ddxvk_native_wsi=sdl3 \
+            --buildtype=release \
+            --wipe
+
+          echo "==> Step 4: Build DXVK .so files"
+          meson compile -C "$DXVK_BUILD" src/d3d8/libdxvk_d3d8.so src/d3d9/libdxvk_d3d9.so
+
+          echo "==> Step 5: Verify"
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
-            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
+            found=$(find "$DXVK_BUILD" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
-              echo "  DXVK $lib: $found ($(stat -c%s "$found") bytes)"
+              echo "  OK: $found ($(stat -c%s "$found") bytes)"
             else
-              echo "  WARNING: $lib not found"
+              echo "  FAIL: $lib not found in $DXVK_BUILD"
+              exit 1
             fi
           done
 
-      - name: Stage ALL .so to jniLibs and rebuild
+      - name: Stage ALL .so to jniLibs and rebuild APK
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
+          set -euo pipefail
           JNI_LIBS="app/src/main/jniLibs/arm64-v8a"
           mkdir -p "$JNI_LIBS"
 
           CXX_BASE=$(find app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
           HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
           CXX_DIR="$HASH_DIR/arm64-v8a"
+          DXVK_BUILD="$CXX_DIR/_deps/dxvk-build-android"
 
-          # Copy ALL .so files from build tree to jniLibs
-          for lib in libdxvk_d3d8.so libdxvk_d3d9.so libSDL3.so libSDL3_image.so libopenal.so libfreetype.so libglm.so libgamespy.so libmain.so libmain_generals.so; do
+          # Copy game .so files from CMake build tree
+          for lib in libmain.so libmain_generals.so libSDL3.so libSDL3_image.so libopenal.so libfreetype.so libglm.so libgamespy.so libc++_shared.so; do
             found=$(find "$CXX_DIR" -maxdepth 5 -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
               cp -f "$found" "$JNI_LIBS/$lib"
               echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
             fi
           done
+
+          # Copy DXVK .so files from meson build tree (separate from CMake)
+          for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
+            found=$(find "$DXVK_BUILD" -name "$lib" -type f 2>/dev/null | head -1)
+            if [ -n "$found" ]; then
+              cp -f "$found" "$JNI_LIBS/$lib"
+              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
+            else
+              echo "  FAIL: $lib not found in $DXVK_BUILD"
+              exit 1
+            fi
+          done
+
           echo "=== jniLibs ==="
           ls -lh "$JNI_LIBS/"
 
-          # Full rebuild — forces Gradle to re-package with jniLibs
-          ./gradlew assembleRelease --no-daemon --rerun-tasks --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
+          # Pass 2: repackage with SAGE_SKIP_NATIVE_BUILD (skip CMake, just package jniLibs)
+          ./gradlew assembleRelease -PSAGE_SKIP_NATIVE_BUILD=true --no-daemon --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
 
       - name: Find APK
         id: find-apk
