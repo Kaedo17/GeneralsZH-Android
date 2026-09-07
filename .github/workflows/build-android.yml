@@ -104,41 +104,8 @@ jobs:
           fi
           echo "CXX build dir: $CXX_DIR"
 
-          # Stage DXVK libs (built by CMake ExternalProject)
-          for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
-            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              cp -f "$found" "$JNI_LIBS/$lib"
-              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            else
-              echo "  WARNING: $lib not found in build tree"
-            fi
-          done
-
-          # Stage SDL3 libs (FetchContent build)
-          for lib in libSDL3.so libSDL3_image.so; do
-            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              cp -f "$found" "$JNI_LIBS/$lib"
-              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            else
-              echo "  WARNING: $lib not found in build tree"
-            fi
-          done
-
-          # Stage OpenAL
-          for lib in libopenal.so; do
-            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              cp -f "$found" "$JNI_LIBS/$lib"
-              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            else
-              echo "  WARNING: $lib not found in build tree"
-            fi
-          done
-
-          # Stage FreeType, GLM, GameSpy
-          for lib in libfreetype.so libglm.so libgamespy.so; do
+          # Stage all .so files from the build tree
+          for lib in libdxvk_d3d8.so libdxvk_d3d9.so libSDL3.so libSDL3_image.so libopenal.so libfreetype.so libglm.so libgamespy.so; do
             found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
               cp -f "$found" "$JNI_LIBS/$lib"
@@ -165,8 +132,8 @@ jobs:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
-          # Pass 2: repackage with staged .so files (skip native rebuild)
-          ./gradlew assembleRelease --no-daemon -PSAGE_SKIP_NATIVE_BUILD=true --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
+          # Pass 2: full rebuild - CMake is cached (fast), now with staged .so files
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
 
       - name: Find APK
         id: find-apk
