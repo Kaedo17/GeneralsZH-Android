@@ -119,12 +119,18 @@ jobs:
           HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
           CXX_DIR="$HASH_DIR/arm64-v8a"
 
-          # Find DXVK libs and inject into APK
+          # Find DXVK libs and inject into APK at correct lib/arm64-v8a/ path
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
             found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
               echo "Injecting $lib into APK..."
-              zip -j "$APK" "$found" 2>&1
+              # Create temp dir with correct structure for zip injection
+              mkdir -p /tmp/apk_inject/lib/arm64-v8a
+              cp "$found" "/tmp/apk_inject/lib/arm64-v8a/$lib"
+              cd /tmp/apk_inject
+              zip -r -u "$APK" lib/ 2>&1
+              cd "$GITHUB_WORKSPACE"
+              rm -rf /tmp/apk_inject
             else
               echo "WARNING: $lib not found, skipping injection"
             fi
