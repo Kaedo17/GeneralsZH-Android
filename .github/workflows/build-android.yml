@@ -97,11 +97,8 @@ jobs:
           CXX_DIR="$HASH_DIR/arm64-v8a"
           echo "CXX dir: $CXX_DIR"
 
-          # Build the DXVK ExternalProject targets using ninja directly
-          ninja -C "$CXX_DIR" -f build.ninja \
-            _deps/dxvk-build-android/src/d3d8/libdxvk_d3d8.so \
-            _deps/dxvk-build-android/src/d3d9/libdxvk_d3d9.so \
-            libdxvk_d3d8.so libdxvk_d3d9.so 2>&1 || true
+          # Build ALL targets via ninja (includes dxvk_d3d8_install custom target)
+          ninja -C "$CXX_DIR" 2>&1 | tail -20 || true
 
           # Verify DXVK libs were built
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
