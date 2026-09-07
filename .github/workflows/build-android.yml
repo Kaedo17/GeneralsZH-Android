@@ -81,114 +81,13 @@ jobs:
           gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
-      - name: Build APK (assembleRelease) — pass 1 (configure + compile)
+      - name: Build APK (assembleRelease)
         working-directory: android
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
         run: |
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log || true
-
-      - name: Build DXVK via meson (Gradle skips ALL custom targets)
-        run: |
-          echo "==> Building DXVK d3d8/d3d9 via meson"
-          CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
-          HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
-          CXX_DIR="$HASH_DIR/arm64-v8a"
-          echo "CXX dir: $CXX_DIR"
-
-          # Build ALL targets via ninja (includes dxvk_d3d8_install custom target)
-          ninja -C "$CXX_DIR" 2>&1 | tail -20 || true
-
-          # Verify DXVK libs were built
-          for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
-            found=$(find "$CXX_DIR" -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              echo "  DXVK $lib built: $found ($(stat -c%s "$found") bytes)"
-            else
-              echo "  WARNING: DXVK $lib not found after build"
-            fi
-          done
-
-      - name: Stage ALL native .so libraries into jniLibs
-        run: |
-          echo "==> Staging ALL native .so files into jniLibs/arm64-v8a/"
-          JNI_LIBS="android/app/src/main/jniLibs/arm64-v8a"
-          mkdir -p "$JNI_LIBS"
-
-          # Find the CMake build directory (the arm64-v8a subdir under .cxx)
-          CXX_BASE=$(find android/app/.cxx -maxdepth 2 -type d -name "RelWithDebInfo" 2>/dev/null | head -1)
-          if [ -z "$CXX_BASE" ]; then
-            echo "ERROR: No .cxx/RelWithDebInfo directory found"
-            exit 1
-          fi
-          HASH_DIR=$(find "$CXX_BASE" -maxdepth 1 -type d ! -name "RelWithDebInfo" | head -1)
-          CXX_DIR="$HASH_DIR/arm64-v8a"
-          echo "CXX build dir: $CXX_DIR"
-
-          # 1. Copy DXVK libs from the meson/ExternalProject build
-          DXVK_BUILD="$CXX_DIR/_deps/dxvk-build-android"
-          if [ -d "$DXVK_BUILD" ]; then
-            for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
-              found=$(find "$DXVK_BUILD" -name "$lib" -type f 2>/dev/null | head -1)
-              if [ -n "$found" ]; then
-                cp -f "$found" "$JNI_LIBS/$lib"
-                echo "  staged DXVK $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-              fi
-            done
-          fi
-
-          # 2. Also check CMAKE_BINARY_DIR root (dx8.cmake copies there too)
-          for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
-            if [ ! -f "$JNI_LIBS/$lib" ] && [ -f "$CXX_DIR/$lib" ]; then
-              cp -f "$CXX_DIR/$lib" "$JNI_LIBS/$lib"
-              echo "  staged $lib from cmake root ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            fi
-          done
-
-          # 3. Copy all other .so files from the build tree
-          for lib in libSDL3.so libSDL3_image.so libopenal.so libfreetype.so libglm.so libgamespy.so; do
-            found=$(find "$CXX_DIR" -maxdepth 3 -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              cp -f "$found" "$JNI_LIBS/$lib"
-              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            fi
-          done
-
-          # 4. Copy libmain.so and libmain_generals.so from CMake build output
-          for lib in libmain.so libmain_generals.so; do
-            found=$(find "$CXX_DIR" -maxdepth 4 -name "$lib" -type f 2>/dev/null | head -1)
-            if [ -n "$found" ]; then
-              cp -f "$found" "$JNI_LIBS/$lib"
-              echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
-            fi
-          done
-
-          # 5. Stage libc++_shared.so from NDK
-          NDK_LIB="/usr/local/lib/android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
-          if [ -f "$NDK_LIB" ]; then
-            cp -f "$NDK_LIB" "$JNI_LIBS/libc++_shared.so"
-            echo "  staged libc++_shared.so"
-          fi
-
-          echo ""
-          echo "=== jniLibs contents ==="
-          ls -lh "$JNI_LIBS/"
-
-          # Verify DXVK is present
-          if [ ! -f "$JNI_LIBS/libdxvk_d3d9.so" ]; then
-            echo "WARNING: libdxvk_d3d9.so NOT staged! Searching entire build tree..."
-            find "$CXX_BASE" -name "libdxvk_d3d9.so" -type f 2>/dev/null
-          fi
-
-      - name: Build APK (final packaging)
-        working-directory: android
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
-          GRADLE_OPTS: "-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
-        run: |
-          # Pass 2: repackage with all staged .so files (skip native rebuild)
-          ./gradlew assembleRelease --no-daemon -PSAGE_SKIP_NATIVE_BUILD=true --stacktrace 2>&1 | tee -a ${GITHUB_WORKSPACE}/build_android.log
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ${GITHUB_WORKSPACE}/build_android.log
 
       - name: Find APK
         id: find-apk
