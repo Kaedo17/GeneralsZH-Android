@@ -76,3 +76,22 @@ index 10fca478..e4714c29 100644
  
      if (pWidth)
        *pWidth = uint32_t(w);
++diff --git a/src/dxvk/dxvk_adapter.cpp b/src/dxvk/dxvk_adapter.cpp
++index 0000001..0000002 100644
++--- a/src/dxvk/dxvk_adapter.cpp
+++++ b/src/dxvk/dxvk_adapter.cpp
++@@ -516,6 +516,7 @@ namespace dxvk {
++ 
++     // Create pNext chain for additional device features
++     initFeatureChain(enabledFeatures, devExtensions, instance->extensions());
+++#ifdef __APPLE__
++ 
++     // macOS/MoltenVK: when VK_KHR_portability_subset is enabled, the Vulkan spec requires
++     // VkPhysicalDevicePortabilitySubsetFeaturesKHR in VkDeviceCreateInfo.pNext set to
++@@ -530,6 +531,7 @@ namespace dxvk {
++       portabilityFeatures.pNext = std::exchange(enabledFeatures.core.pNext, &portabilityFeatures);
++     }
+++#endif
++ 
++     // Log feature support info an extension list
++     Logger::info(str::format("Device properties:"
