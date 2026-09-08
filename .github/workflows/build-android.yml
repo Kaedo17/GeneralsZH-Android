@@ -110,7 +110,21 @@ jobs:
           echo "==> Step 2: Wipe stale DXVK meson state (ExternalProject left bad config)"
           rm -rf "$DXVK_BUILD"
 
-          echo "==> Step 3: Configure DXVK with meson"
+          echo "==> Step 3: Inject pkg-config path into cross file"
+          # Meson cross builds may not propagate PKG_CONFIG_PATH to pkg-config.
+          # Inject the path directly into the generated cross file.
+          if ! grep -q "pkg_config_path" "$CROSS_FILE"; then
+            echo "" >> "$CROSS_FILE"
+            echo "[properties]" >> "$CROSS_FILE"
+            echo "pkg_config_path = ['${SDL3_PC}']" >> "$CROSS_FILE"
+          fi
+          echo "Cross file [properties] section:"
+          tail -5 "$CROSS_FILE"
+
+          echo "==> Step 4: Verify pkg-config finds SDL3"
+          PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}" pkg-config --modversion sdl3 2>&1 || echo "WARNING: pkg-config cannot find sdl3"
+
+          echo "==> Step 5: Configure DXVK with meson"
           export PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}"
           meson setup "$DXVK_BUILD" "$DXVK_SRC" \
             --cross-file "$CROSS_FILE" \
@@ -118,10 +132,10 @@ jobs:
             --buildtype=release \
             --wipe
 
-          echo "==> Step 4: Build DXVK .so files"
+          echo "==> Step 6: Build DXVK .so files"
           meson compile -C "$DXVK_BUILD" src/d3d8/libdxvk_d3d8.so src/d3d9/libdxvk_d3d9.so
 
-          echo "==> Step 5: Verify"
+          echo "==> Step 7: Verify"
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
             found=$(find "$DXVK_BUILD" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
