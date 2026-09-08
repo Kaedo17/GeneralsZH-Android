@@ -107,20 +107,20 @@ jobs:
           fi
           ls -lh "$CXX_DIR/_deps/sdl3-build/libSDL3.so" 2>&1 || { echo "FAIL: libSDL3.so not found"; exit 1; }
 
+          # DXVK meson.build uses dependency('SDL3') (uppercase). pkg-config
+          # is case-sensitive and looks for SDL3.pc. Our shim is sdl3.pc.
+          # Create uppercase aliases.
+          if [ ! -f "$SDL3_PC/SDL3.pc" ]; then
+            cp "$SDL3_PC/sdl3.pc" "$SDL3_PC/SDL3.pc"
+            sed -i 's/^Name: sdl3$/Name: SDL3/' "$SDL3_PC/SDL3.pc"
+            echo "  Created SDL3.pc alias"
+          fi
+
           echo "==> Step 2: Wipe stale DXVK meson state (ExternalProject left bad config)"
           rm -rf "$DXVK_BUILD"
 
-          echo "==> Step 3: Inject pkg-config path into cross file"
-          # Meson cross files use single quotes. Inject into existing [properties].
-          if ! grep -q "pkg_config_path" "$CROSS_FILE"; then
-            PCPATH="$SDL3_PC"
-            sed -i "/^\[properties\]/a pkg_config_path = ['$PCPATH']" "$CROSS_FILE"
-          fi
-          echo "Cross file tail:"
-          tail -10 "$CROSS_FILE"
-
-          echo "==> Step 4: Verify pkg-config finds SDL3"
-          PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}" pkg-config --modversion sdl3 2>&1 || echo "WARNING: pkg-config cannot find sdl3"
+          echo "==> Step 3: Verify pkg-config finds SDL3 (uppercase)"
+          PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}" pkg-config --modversion SDL3 2>&1 || echo "WARNING: pkg-config cannot find SDL3"
 
           echo "==> Step 5: Configure DXVK with meson"
           export PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}"
@@ -133,7 +133,7 @@ jobs:
           echo "==> Step 6: Build DXVK .so files"
           meson compile -C "$DXVK_BUILD" src/d3d8/libdxvk_d3d8.so src/d3d9/libdxvk_d3d9.so
 
-          echo "==> Step 7: Verify"
+          echo "==> Step 7: Verify DXVK builds"
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
             found=$(find "$DXVK_BUILD" -name "$lib" -type f 2>/dev/null | head -1)
             if [ -n "$found" ]; then
