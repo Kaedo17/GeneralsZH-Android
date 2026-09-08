@@ -131,7 +131,7 @@ jobs:
             --wipe
 
           echo "==> Step 6: Build DXVK .so files"
-          meson compile -C "$DXVK_BUILD" src/d3d8/libdxvk_d3d8.so src/d3d9/libdxvk_d3d9.so
+          meson compile -C "$DXVK_BUILD" dxvk_d3d8 dxvk_d3d9
 
           echo "==> Step 7: Verify DXVK builds"
           for lib in libdxvk_d3d8.so libdxvk_d3d9.so; do
