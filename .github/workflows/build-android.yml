@@ -95,7 +95,17 @@ jobs:
 
           echo "==> Step 1: Build SDL3 (DXVK meson needs it for pkg-config)"
           ninja -C "$CXX_DIR" SDL3-shared
-          echo "SDL3 built: $(ls -lh $CXX_DIR/_deps/sdl3-build/libSDL3.so)"
+
+          # Gradle remaps CMake output paths to build/intermediates/cxx/.
+          # The pkg-config shim (written by dx8.cmake at CMake configure time)
+          # expects libSDL3.so at $CXX_DIR/_deps/sdl3-build/. Copy it there.
+          SDL3_GRADLE=$(find android/app/build/intermediates/cxx -name "libSDL3.so" -type f 2>/dev/null | head -1)
+          if [ -n "$SDL3_GRADLE" ]; then
+            mkdir -p "$CXX_DIR/_deps/sdl3-build"
+            cp -f "$SDL3_GRADLE" "$CXX_DIR/_deps/sdl3-build/libSDL3.so"
+            echo "  Copied SDL3 from Gradle intermediates to $CXX_DIR/_deps/sdl3-build/"
+          fi
+          ls -lh "$CXX_DIR/_deps/sdl3-build/libSDL3.so" 2>&1 || { echo "FAIL: libSDL3.so not found"; exit 1; }
 
           echo "==> Step 2: Wipe stale DXVK meson state (ExternalProject left bad config)"
           rm -rf "$DXVK_BUILD"
@@ -137,9 +147,13 @@ jobs:
           CXX_DIR="$HASH_DIR/arm64-v8a"
           DXVK_BUILD="$CXX_DIR/_deps/dxvk-build-android"
 
-          # Copy game .so files from CMake build tree
+          # Copy game .so files from CMake build tree and Gradle intermediates
+          GRADLE_CXX=$(find app/build/intermediates/cxx -maxdepth 3 -type d -name "obj" 2>/dev/null | head -1)
           for lib in libmain.so libmain_generals.so libSDL3.so libSDL3_image.so libopenal.so libfreetype.so libglm.so libgamespy.so libc++_shared.so; do
             found=$(find "$CXX_DIR" -maxdepth 5 -name "$lib" -type f 2>/dev/null | head -1)
+            if [ -z "$found" ] && [ -n "$GRADLE_CXX" ]; then
+              found=$(find "$GRADLE_CXX" -maxdepth 5 -name "$lib" -type f 2>/dev/null | head -1)
+            fi
             if [ -n "$found" ]; then
               cp -f "$found" "$JNI_LIBS/$lib"
               echo "  staged $lib ($(stat -c%s "$JNI_LIBS/$lib") bytes)"
