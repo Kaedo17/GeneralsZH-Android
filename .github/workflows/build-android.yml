@@ -44,7 +44,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
-            cmake ninja-build meson python3-pip pkg-config zip
+            cmake ninja-build meson python3-pip pkg-config zip glslang-tools
           pip3 install meson
           echo "Build tools:"
           cmake --version
