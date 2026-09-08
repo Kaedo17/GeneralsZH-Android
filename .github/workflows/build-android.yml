@@ -111,15 +111,13 @@ jobs:
           rm -rf "$DXVK_BUILD"
 
           echo "==> Step 3: Inject pkg-config path into cross file"
-          # Meson cross builds may not propagate PKG_CONFIG_PATH to pkg-config.
-          # Inject the path directly into the generated cross file.
+          # The cross file already has a [properties] section. Inject
+          # pkg_config_path into it using sed instead of appending a duplicate.
           if ! grep -q "pkg_config_path" "$CROSS_FILE"; then
-            echo "" >> "$CROSS_FILE"
-            echo "[properties]" >> "$CROSS_FILE"
-            echo "pkg_config_path = ['${SDL3_PC}']" >> "$CROSS_FILE"
+            sed -i '/^\[properties\]/a pkg_config_path = ["'"${SDL3_PC}"'"]' "$CROSS_FILE"
           fi
-          echo "Cross file [properties] section:"
-          tail -5 "$CROSS_FILE"
+          echo "Cross file tail:"
+          tail -10 "$CROSS_FILE"
 
           echo "==> Step 4: Verify pkg-config finds SDL3"
           PKG_CONFIG_PATH="${SDL3_PC}:${PKG_CONFIG_PATH:-}" pkg-config --modversion sdl3 2>&1 || echo "WARNING: pkg-config cannot find sdl3"
