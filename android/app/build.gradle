@@ -23,8 +23,9 @@ android {
         // libvulkan.so. DXVK requires native Vulkan; there is no fallback.
         minSdk 24
         targetSdk 35
-        versionCode 12
-        versionName "0.12-android"
+        // GeneralsX @build android-port 10/09/2026 Final maintenance release.
+        versionCode 13
+        versionName "0.13-android"
 
         // Arm64-v8a only: the game is a desktop RTS port; skip armeabi-v7a and
         // ship x86_64 only for emulator debugging via a separate build flavor
@@ -228,4 +229,5 @@ dependencies {
     // only way to read a game install from shared storage on Android 11+ without
     // MANAGE_EXTERNAL_STORAGE, which is a Play-restricted permission.
     implementation 'androidx.documentfile:documentfile:1.0.1'
+    testImplementation 'junit:junit:4.13.2'
 }

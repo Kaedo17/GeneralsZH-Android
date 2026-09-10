@@ -23,10 +23,8 @@ import android.os.Looper;
 import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -105,20 +103,13 @@ public final class GameDataImporter {
                             return;
                         }
 
-                        // Skip files already present at the same size: re-running
-                        // an import after a failure part-way through should not
-                        // re-copy gigabytes it already has.
                         long srcLen = e.doc.length();
-                        if (out.isFile() && out.length() == srcLen && srcLen > 0) {
-                            done += srcLen;
-                            post(listener, "Skipping " + e.doc.getName() + " (already copied)",
-                                 pct(done, total));
-                            continue;
-                        }
 
                         post(listener, "Copying " + e.doc.getName()
                                 + "  (" + human(srcLen) + ")", pct(done, total));
-                        done += copyOne(ctx, e.doc.getUri(), out);
+                        // Document providers sometimes report 0 when the size is
+                        // unknown; only enforce a positive advertised length.
+                        done += copyOne(ctx, e.doc.getUri(), out, srcLen > 0 ? srcLen : -1);
                         copied++;
                     }
 
@@ -200,26 +191,16 @@ public final class GameDataImporter {
             || n.endsWith(".ttf");
     }
 
-    private long copyOne(Context ctx, Uri src, File dst) throws IOException {
-        InputStream in = null;
-        OutputStream os = null;
+    private long copyOne(Context ctx, Uri src, File dst, long expectedLength) throws IOException {
+        InputStream in = ctx.getContentResolver().openInputStream(src);
+        if (in == null) throw new IOException("cannot read " + src);
         try {
-            in = ctx.getContentResolver().openInputStream(src);
-            if (in == null) throw new IOException("cannot read " + src);
-            os = new FileOutputStream(dst);
-            byte[] buf = new byte[1 << 16];
-            long n = 0;
-            int r;
-            while ((r = in.read(buf)) > 0) {
-                if (cancelled.get()) break;
-                os.write(buf, 0, r);
-                n += r;
-            }
-            os.flush();
-            return n;
+            return AtomicFileCommit.copy(in, dst, expectedLength,
+                new AtomicFileCommit.Cancellation() {
+                    @Override public boolean isCancelled() { return cancelled.get(); }
+                });
         } finally {
             closeQuietly(in);
-            closeQuietly(os);
         }
     }
 

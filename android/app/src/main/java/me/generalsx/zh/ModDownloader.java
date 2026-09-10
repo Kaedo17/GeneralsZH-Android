@@ -270,10 +270,11 @@ public final class ModDownloader {
 
     /** Returns null on success, else a message. Verifies MD5 before keeping the file. */
     private String fetch(String bucket, S3Object o, File out) {
-        File tmp = new File(out.getAbsolutePath() + ".part");
+        File tmp = null;
         HttpURLConnection c = null;
         InputStream in = null;
         OutputStream os = null;
+        boolean committed = false;
         try {
             StringBuilder u = new StringBuilder(HOST).append('/').append(bucket).append('/');
             for (String seg : o.key.split("/")) {
@@ -283,39 +284,60 @@ public final class ModDownloader {
 
             c = open(u.toString());
             in = c.getInputStream();
+            File parent = out.getParentFile();
+            if (parent == null || (!parent.exists() && !parent.mkdirs())) {
+                return "could not create destination directory";
+            }
+            tmp = File.createTempFile(out.getName() + ".part-", ".tmp", parent);
             os = new FileOutputStream(tmp);
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] buf = new byte[1 << 16];
+            long totalRead = 0;
             int r;
             while ((r = in.read(buf)) > 0) {
-                if (cancelled.get()) return "cancelled";
+                if (cancelled.get()) {
+                    return "cancelled";
+                }
                 os.write(buf, 0, r);
                 md.update(buf, 0, r);
+                totalRead += r;
             }
             os.flush();
-            closeQuietly(os); os = null;
+            os.close();
+            os = null;
+
+            if (o.size >= 0 && totalRead != o.size) {
+                return "size mismatch (expected " + o.size + " bytes, got "
+                     + totalRead + "). The incomplete file was discarded.";
+            }
 
             if (o.md5 != null) {
                 String got = hex(md.digest());
                 if (!got.equalsIgnoreCase(o.md5)) {
                     //noinspection ResultOfMethodCallIgnored
-                    tmp.delete();
                     return "checksum mismatch (expected " + o.md5 + ", got " + got + ").\n"
                          + "The file was corrupted or altered in transit; it has been discarded.";
                 }
             }
-            //noinspection ResultOfMethodCallIgnored
-            out.delete();
-            if (!tmp.renameTo(out)) return "could not move the finished file into place";
+            if (cancelled.get()) return "cancelled";
+            try {
+                AtomicFileCommit.promote(tmp, out);
+            } catch (IOException e) {
+                return "could not move the finished file into place";
+            }
+            committed = true;
             return null;
         } catch (Exception e) {
             //noinspection ResultOfMethodCallIgnored
-            tmp.delete();
+            if (tmp != null) tmp.delete();
             return String.valueOf(e);
         } finally {
             closeQuietly(in);
             closeQuietly(os);
             if (c != null) c.disconnect();
+            if (!committed) {
+                if (tmp != null) tmp.delete();
+            }
         }
     }
 

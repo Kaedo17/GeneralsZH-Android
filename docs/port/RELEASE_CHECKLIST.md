@@ -1,4 +1,21 @@
-# Before making this repo public
+# Final Android release checklist
+
+Updated 2026-09-10. The publication audit below is historical, not evidence that
+a new APK has passed. See the [handover](../WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md).
+
+- [ ] Focused regression checks and release build pass.
+- [ ] Candidate package/version are correct; GameActivity remains private.
+- [ ] Every native library matches the verified v0.12 donor for Java-only fixes.
+- [ ] APK alignment/signature pass and signing certificate matches v0.12.
+- [ ] In-place upgrade retains game data, saves and launcher preferences.
+- [ ] Import cancellation/failure preserves existing complete files.
+- [ ] Zero Hour skirmish, save/load, exit/relaunch and suspend/resume pass.
+- [ ] Available audio/video/input and Generals coverage is recorded honestly.
+- [ ] Release notes describe measured coverage and unresolved GitHub issues.
+- [ ] Source commit, signed APK, SHA-256 and provenance are preserved.
+- [ ] Maintenance notice and handover match actual publication status.
+
+## Historical publication audit
 
 - [x] **App icon**: composited from the game's own `.ico` art. Decision (2026-07-04):
       ship as-is — it derives from the GPL-released game's own resources and stays
