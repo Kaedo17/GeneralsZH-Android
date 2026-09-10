@@ -5,7 +5,7 @@
 **Both 2003 RTS engines running natively on Android tablets** — not emulation,
 not a compatibility layer. The real C++ engines compiled for arm64, rendering
 DirectX 8 → [DXVK](https://github.com/doitsujin/dxvk) → Vulkan on Adreno/Mali GPUs.
-This is the **first-ever DXVK build for Android**.
+The Android release uses d3d8to9 and DXVK Native 1.9.2b.
 
 **Generals and Zero Hour both ship in one APK** and are chosen in the launcher —
 they are two separate engines (`libmain.so` and `libmain_generals.so`), not one
@@ -15,6 +15,14 @@ engine with different data.
 > distributed. See [How to Play](#how-to-play) below.
 
 ---
+
+## Maintenance status
+
+Active maintenance is ending. A final maintenance candidate is being prepared;
+**v0.12 remains the latest published release until that candidate is validated**.
+No ongoing fixes or support are promised. Forks and continued community work are
+welcome. See the [final handover](docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md)
+for the release procedure, preserved context, and remaining validation gates.
 
 ## Status
 
@@ -49,8 +57,8 @@ import, but have not been run.
 **Shadow volumes are disabled by default** (a launcher toggle). They draw as
 opaque black geometry through DXVK on Mali, which is what most "black terrain"
 and "black model" reports were. Shadow decals are used instead and render
-correctly. A couple of Rise of the Reds buildings still render black --
-see [the known issue](docs/port/KNOWN_ISSUE_BLACK_MODELS.md).
+correctly. The Rise of the Reds DXT3 black-building bug was fixed in v0.10 --
+see [the historical investigation](docs/port/KNOWN_ISSUE_BLACK_MODELS.md).
 
 Generals is newer than Zero Hour here: it boots, renders at native resolution
 with correct terrain, and reaches a campaign mission intro. Everything marked
@@ -62,15 +70,19 @@ speech/EVA commentary goes through the same decoder path, which was fixed in the
 same change and verified at the object level, but has not been separately
 confirmed by ear in a mission.
 
-### Verified devices
+### Historical device coverage
 
 | Device | GPU / driver | Renderer | Result |
 |---|---|---|---|
-| OnePlus Pad 2 | Adreno 830, Vulkan 1.3 | Current DXVK lane | Full gameplay verified |
+| OnePlus Pad 2 | Adreno 830, Vulkan 1.3 | Historical DXVK lane | Full gameplay verified |
 | TCL NXTPAPER 9469X | Mali-G57 MC2, Vulkan 1.1.177 | Mali legacy lane | Both games. Zero Hour: full mission, 30 FPS, video/audio/touch/mouse verified. Generals: boots to its own menu, native resolution, terrain renders, reaches a mission intro |
-| Galaxy S24 Ultra | Adreno 750, Vulkan 1.3 | Current DXVK lane | Runs; video and audio verified |
+| Galaxy S24 Ultra | Adreno 750, Vulkan 1.3 | Historical DXVK lane | Runs; video and audio verified |
 
-The TCL result was measured on physical hardware on 2026-07-30. Text, icons,
+These are historical port results, not final-candidate test results. v0.12 was
+tested on TCL; its S24 installation had no game data. See the release-specific
+evidence in [the handover](docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md).
+
+The original TCL result was measured on physical hardware on 2026-07-30. Text, icons,
 colors, animated menu rendering, touch input, and mission gameplay are correct.
 A complete mission was played without a crash or rendering failure. Extended
 replay, suspend/resume, thermal, and memory-growth testing remain useful
@@ -85,13 +97,12 @@ follow-up coverage.
 1. **An Android tablet** with:
    - **arm64-v8a** architecture (all modern tablets)
    - **Android 7.0+** (API 24+, for system Vulkan support)
-   - A **Vulkan-capable GPU** (modern Adreno, or a supported Mali device using
-     the separate Mali APK)
+   - A **Vulkan-capable GPU** (modern Adreno, or a supported Mali device)
    - **~3GB free RAM** for the game process
    - **~2.5GB storage** for game data
 
 2. **A legal copy of C&C Generals Zero Hour**:
-   - [Steam](https://store.steampowered.com/app/2732960/) (~$5 on sale, includes base game + Zero Hour)
+   - [Steam](https://store.steampowered.com/app/2732960/) (check the store listing for edition contents)
    - Or any retail/EA App/Origin install
    - You need the **Complete Edition** or both Generals + Zero Hour installed
 
@@ -99,17 +110,11 @@ follow-up coverage.
 
 Grab the latest APK from the [**Releases page**](../../releases):
 
-Two variants are published, differing **only** in the DXVK layer — the engine
-binary is identical:
-
-| APK | For | DXVK |
-|---|---|---|
-| `GeneralsZH-vX.Y-Vulkan.apk` | Devices with a full **Vulkan 1.3** driver (modern Adreno, e.g. Galaxy S24 Ultra) | 2.6 |
-| `GeneralsZH-vX.Y-TCL-Mali.apk` | **Vulkan 1.1** Mali-G57-class devices without BC/DXT texture support (e.g. TCL NXTPAPER) | Native 1.9.2b + d3d8to9 |
-
-DXVK 2.6 requires desktop-class Vulkan features (`VK_EXT_robustness2`,
-`graphicsPipelineLibrary`, `transformFeedback`) and will not create a device on
-mid-range Mali. If the Vulkan build fails to start, use the Mali one.
+Since v0.11, **one APK serves both tested Adreno and Mali devices**:
+`GeneralsZH-vX.Y.apk`, using d3d8to9 + DXVK Native 1.9.2b. The older
+`-Vulkan` / `-TCL-Mali` split is retired. DXVK 2.6 caused crashes on the tested
+Adreno device and must not be substituted just because a GPU supports Vulkan 1.3.
+Compatibility with every Vulkan-capable device is not established.
 
 > **Do not uninstall to upgrade.** Uninstalling deletes
 > `Android/data/me.generalsx.zh/`, including your copied GameData. Install over
@@ -120,28 +125,24 @@ mid-range Mali. If the Vulkan build fails to start, use the Mali one.
 
 ```bash
 # Enable "Install from unknown sources" for your file manager first
-adb install GeneralsZH-full.apk
+adb install -r GeneralsZH-v0.12.apk
 
 # Or transfer the APK to your tablet and tap it in Files
 ```
 
 ### Step 3: Copy your game data
 
-The game needs its `.big` archive files on your tablet's filesystem:
+Copy your legally owned game install to a folder accessible through Android's
+file picker, then choose **Import game files…** in the launcher. Select the folder
+containing the archives; keep original filenames and the install's directory
+structure. The importer copies the supported files into app storage. Fonts are
+bundled and extracted automatically.
 
-```bash
-# Create the game data directory on the tablet
-adb shell mkdir -p /sdcard/Android/data/me.generalsx.zh/files/GameData/Data
+Use **Verify game files** after import. This checks archive headers and sizes;
+a clean report does not prove all required game content is present or valid.
+If launch fails, use **Export engine log** and retain both available sessions.
 
-# Copy ALL .big files from your PC install to the tablet
-# (from your Generals install directory, typically):
-#   C:\Program Files (x86)\Steam\steamapps\common\Generals\
-adb push "*.big" /sdcard/Android/data/me.generalsx.zh/files/GameData/Data/
-
-# The fonts are bundled in the APK and extract automatically on first launch.
-```
-
-**Required .big files** (copy all of these from your install's `Data/` folder):
+**Required .big files** (include the archives from your game installation):
 
 | File | Contents |
 |------|----------|
@@ -212,8 +213,7 @@ understood. Only one addition was needed: **`-datadir <path>`**, handled in
 `SDL3Main.cpp` before the working directory is set, which is what makes
 switching between installs possible.
 
-Starting `GameActivity` directly (an old shortcut, or `adb shell am start`)
-still works and reuses the launcher's saved settings.
+Start the game through the launcher. Since v0.12, GameActivity is private to the app.
 
 ### Playing the original Generals
 
@@ -236,9 +236,7 @@ selection, so switching games does not disturb your Zero Hour setup.
 > Window.big  gensec.big  maps.big  shaders.big
 > ```
 >
-> If you create the folder with `adb` rather than the launcher, run
-> `chmod -R 777` on it afterwards — files pushed that way are owned by `shell`
-> and the app cannot read them.
+> Prefer the launcher importer; access to shell-copied files varies with Android storage restrictions.
 
 ---
 
@@ -286,38 +284,14 @@ arrives as the BACK button). If you are working on input, read
 
 ## Build from Source
 
-### Prerequisites
+See [Android build and packaging](scripts/build/android/README.md) for the
+current tool versions and the verified-runtime packaging path. A default native
+build can still stage the retired DXVK 2.6 runtime; a successful Gradle build
+alone does not establish release readiness.
 
-- **Android NDK r27** (27.1.12297006)
-- **Android SDK** with build-tools 35.0.0
-- **CMake 3.25+** and **Ninja**
-- **Meson** (for DXVK cross-compilation)
-- **Android Studio** or Gradle 8.7+ (for the APK packaging)
+### Unified release renderer
 
-### Build steps
-
-```bash
-# Clone
-git clone https://github.com/l3ad3r1/GeneralsZH-Android.git
-cd GeneralsZH-Android
-
-# Initialize the DXVK fork submodule
-git submodule update --init references/fbraz3-dxvk
-
-# Configure + build the native engine (arm64-v8a)
-cmake --preset android-game
-cmake --build build/android-game --target z_generals
-
-# Package the APK (stages fonts, DXVK .so, SDL3 .so, etc.)
-./scripts/build/android/package-android-zh.sh
-
-# The signed APK appears at:
-#   android/app/build/outputs/apk/release/app-release.apk
-```
-
-### Mali legacy renderer
-
-The Mali renderer uses two pinned upstream components:
+The unified release renderer uses two pinned upstream components:
 
 - `Joshua-Ashton/dxvk-native`, tag `native-1.9.2b`, commit
   `c8dc91fabd00cac11d697ccf07426e798393cd40`
@@ -372,7 +346,7 @@ Getting a 2003 Windows DirectX 8 game running natively on Android required:
 |---|---|
 | [`docs/port/ANDROID_INPUT.md`](docs/port/ANDROID_INPUT.md) | The touch gesture scheme, and the four Android mouse traps that caused regressions (mice emit touch events; `SDL_HasMouse()` lies; a real mouse reports device id `0`; right-click arrives as BACK). **Read before touching input.** |
 | [`docs/port/ANDROID_FFMPEG.md`](docs/port/ANDROID_FFMPEG.md) | The two independent FFmpeg stub layers, why a stubbed build reports SUCCESS with no audio or video, and the one-command check that detects it. Also the Bink `bink` vs `binkvideo` configure trap and the soname fix. |
-| [`docs/port/KNOWN_ISSUE_BLACK_MODELS.md`](docs/port/KNOWN_ISSUE_BLACK_MODELS.md) | A few Rise of the Reds buildings render black. Open issue, with six theories already eliminated by measurement so nobody repeats the work. |
+| [`docs/port/KNOWN_ISSUE_BLACK_MODELS.md`](docs/port/KNOWN_ISSUE_BLACK_MODELS.md) | Historical DXT3 black-building investigation, fixed in v0.10; preserves the evidence and rejected theories. |
 | [`docs/port/PORTING_PLAYBOOK.md`](docs/port/PORTING_PLAYBOOK.md) | General porting workflow |
 | [`docs/port/PORTING_PATTERNS.md`](docs/port/PORTING_PATTERNS.md) | Recurring code patterns used across the port |
 | [`docs/port/RELEASE_CHECKLIST.md`](docs/port/RELEASE_CHECKLIST.md) | Steps before cutting a release |

@@ -1,6 +1,9 @@
 # Android port — working state
 
-Last updated 2026-08-08. Written to compress a long session; read this before
+Historical implementation record, through 2026-08-16. For the final maintenance
+status see [the handover](WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md).
+
+Written to compress a long session; read this before
 picking the work back up.
 
 ## Where things stand
@@ -131,7 +134,7 @@ the standalone Generals game data was removed from that device (see below).
 android/gradlew.bat :app:assembleRelease
 scripts/build/android/package-mali-apk.py --base <fresh APK> \
     --dxvk-from <old Mali APK> --require-dex-string LauncherActivity --output out.apk
-zipalign -f -P 16 4 ; apksigner sign --ks my-release-key.jks   (both devices, pass: android)
+zipalign -f -P 16 4 ; apksigner sign --ks my-release-key.jks   (use private credentials; do not put them in commands or docs)
 ```
 
 - **Check which DXVK you are staging.** For a Java-only change the native build
@@ -145,7 +148,7 @@ zipalign -f -P 16 4 ; apksigner sign --ks my-release-key.jks   (both devices, pa
   exception`, then a clean exit with no crash and a task restart loop that looks
   nothing like a library problem. The tell is file size --
   1.09 MB / 2.64 MB for `libdxvk_d3d8/d3d9.so` is 1.9.2b; 6.2 MB / 37.7 MB is
-  2.6. `libmain.so` is identical either way, so size is the only signal.
+  2.6. `libmain.so` is identical either way; compare library hashes to a verified release donor. Size is only a heuristic.
 - Mali variant MUST be built with `--dxvk-from`, not by grafting onto an old
   base: an old base brings its own `classes.dex`, which silently ships stale
   Java. The `--require-dex-string` guard exists because that happened. Note the

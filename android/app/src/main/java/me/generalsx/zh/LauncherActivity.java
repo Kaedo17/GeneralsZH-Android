@@ -65,6 +65,8 @@ public class LauncherActivity extends Activity {
     private TextView statusText, argsText, titleText;
     private ProgressBar progress;
     private Button playButton;
+    private boolean busy;
+    private final List<View> busyControls = new ArrayList<>();
 
     private final GameDataImporter importer = new GameDataImporter();
     private final ModDownloader downloader = new ModDownloader();
@@ -115,6 +117,13 @@ public class LauncherActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refresh();   // data may have changed while the game or a file manager ran
+    }
+
+    @Override
+    protected void onDestroy() {
+        importer.cancel();
+        downloader.cancel();
+        super.onDestroy();
     }
 
     // ---------------------------------------------------------------- UI ----
@@ -363,6 +372,7 @@ public class LauncherActivity extends Activity {
         b.setTextColor(TEXT);
         b.setBackgroundColor(0xFF243040);
         b.setOnClickListener(l);
+        busyControls.add(b);
         return b;
     }
 
@@ -431,7 +441,7 @@ public class LauncherActivity extends Activity {
 
     private void updateSummary() {
         boolean ready = !profiles.isEmpty();
-        playButton.setEnabled(ready);
+        playButton.setEnabled(ready && !busy);
         playButton.setBackgroundColor(ready ? 0xFF2D6FB8 : 0xFF33404F);
 
         File root = LauncherConfig.storageRoot(this);
@@ -555,7 +565,10 @@ public class LauncherActivity extends Activity {
     /** Strip path separators so a typed name cannot escape the intended directory. */
     private static String sanitize(String s) {
         if (s == null) return "";
-        return s.trim().replaceAll("[^A-Za-z0-9 _.\\-]", "").trim();
+        String clean = s.trim().replaceAll("[^A-Za-z0-9 _.\\-]", "").trim();
+        // A child named . or .. would still escape the selected profiles/mods
+        // root when passed to new File(root, name).
+        return (".".equals(clean) || "..".equals(clean)) ? "" : clean;
     }
 
     private void startImport(Uri tree, final File dest, final String what) {
@@ -563,10 +576,12 @@ public class LauncherActivity extends Activity {
         statusText.setText("Preparing to import " + what + "…");
         importer.importFrom(this, tree, dest, new GameDataImporter.Listener() {
             @Override public void onProgress(String message, int percent) {
+                if (!isUiAlive()) return;
                 statusText.setText(message);
                 progress.setProgress(percent);
             }
             @Override public void onFinished(boolean ok, String message) {
+                if (!isUiAlive()) return;
                 setBusy(false);
                 refresh();
                 new AlertDialog.Builder(LauncherActivity.this)
@@ -579,9 +594,25 @@ public class LauncherActivity extends Activity {
     }
 
     private void setBusy(boolean busy) {
+        this.busy = busy;
         progress.setVisibility(busy ? View.VISIBLE : View.GONE);
         progress.setProgress(0);
+        for (View control : busyControls) control.setEnabled(!busy);
+        if (engineSpinner != null) engineSpinner.setEnabled(!busy);
+        if (profileSpinner != null) profileSpinner.setEnabled(!busy);
+        if (modSpinner != null) modSpinner.setEnabled(!busy);
+        if (skipIntro != null) skipIntro.setEnabled(!busy);
+        if (noShellMap != null) noShellMap.setEnabled(!busy);
+        if (windowed != null) windowed.setEnabled(!busy);
+        if (noShadowVolumes != null) noShadowVolumes.setEnabled(!busy);
         playButton.setEnabled(!busy && !profiles.isEmpty());
+    }
+
+    // GeneralsX @bugfix android-port 10/09/2026 Background imports and
+    // downloads can finish after Android has destroyed this Activity. Avoid
+    // touching detached views or showing a dialog on a dead window.
+    private boolean isUiAlive() {
+        return !isFinishing() && !isDestroyed();
     }
 
     /**
@@ -624,6 +655,7 @@ public class LauncherActivity extends Activity {
         statusText.setText("Checking size of " + entry.name + "…");
         downloader.querySize(entry, new ModDownloader.SizeListener() {
             @Override public void onSize(boolean ok, int files, long bytes, String error) {
+                if (!isUiAlive()) return;
                 setBusy(false);
                 if (!ok) {
                     statusText.setText("Could not reach the mod host.");
@@ -667,10 +699,12 @@ public class LauncherActivity extends Activity {
         statusText.setText("Preparing to download " + entry.name + "…");
         downloader.download(entry, dest, new ModDownloader.Listener() {
             @Override public void onProgress(String message, int percent) {
+                if (!isUiAlive()) return;
                 statusText.setText(message);
                 progress.setProgress(percent);
             }
             @Override public void onFinished(boolean ok, String message) {
+                if (!isUiAlive()) return;
                 setBusy(false);
                 refresh();
                 new AlertDialog.Builder(LauncherActivity.this)

@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public final class LauncherConfig {
 
@@ -198,7 +199,9 @@ public final class LauncherConfig {
 
     /** A BIGF archive: .big (base game) or .gib (mods). */
     public static boolean isArchive(String name) {
-        String n = name.toLowerCase();
+        // GeneralsX @bugfix android-port 10/09/2026 Use a stable locale for
+        // extension matching; Turkish locale rules must not change .BIG checks.
+        String n = name.toLowerCase(Locale.ROOT);
         return n.endsWith(".big") || n.endsWith(".gib");
     }
 

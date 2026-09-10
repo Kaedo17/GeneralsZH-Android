@@ -5,6 +5,8 @@ GeneralsX is a cross-platform port of Command & Conquer: Generals Zero Hour for 
 
 ## Must-Load Context
 Before starting work, read:
+- `docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md` – final maintenance status and release gates
+- `docs/STATE.md` – Android implementation history (dated observations)
 - `.github/copilot-instructions.md` – quick reference
 - `.github/instructions/generalsx.instructions.md` – full architecture
 - `.github/instructions/git-commit.instructions.md` – commit standards
@@ -18,7 +20,7 @@ Before starting work, read:
 
 ## Platform Focus
 - **Active**: Linux (`linux64-deploy`), macOS (`macos-vulkan`), iOS/iPadOS (`ios-vulkan`)
-- **In Progress**: Android tablets (`android-vulkan`) — scaffolding landed 2026-07-06, runtime UNVERIFIED. The DXVK-on-Android spike is the go/no-go gate. See `docs/WORKDIR/phases/PHASE06_ANDROID_PORT.md`.
+- **Final maintenance**: Android arm64 — v0.12 released 2026-08-16; one APK uses DXVK Native 1.9.2b on tested Adreno/Mali devices. New candidate runtime remains unverified until device testing. See `docs/WORKDIR/reports/FINAL_MAINTENANCE_HANDOVER.md`.
 - **Future/Exploratory**: Windows (MinGW path, issue #29)
 - **Legacy**: VC6 + DirectX 8 + Miles (reference only)
 

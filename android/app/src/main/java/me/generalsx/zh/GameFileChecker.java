@@ -86,8 +86,11 @@ final class GameFileChecker {
                 + " found.");
         if (counters[1] == 0 && counters[0] > 0) {
             line(sb, "All archives look intact. If the game still fails to start, the");
-            line(sb, "cause is not a truncated/mis-typed archive — check logcat (tag");
-            line(sb, "'" + TAG + "' and the engine's own output) for the failing stage.");
+            // GeneralsX @bugfix android-port 11/09/2026 State the limits of the
+            // inexpensive header/size check; it cannot prove content completeness.
+            line(sb, "No header/size problems found. Contents and required-file");
+            line(sb, "completeness were not checked — check logcat (tag '" + TAG + "'");
+            line(sb, "and the engine's own output) for the failing stage.");
         } else if (counters[1] > 0) {
             line(sb, "Re-import or re-download the file(s) marked [FAIL] above; a partial");
             line(sb, "copy is the usual cause. Export this report to share the details.");
